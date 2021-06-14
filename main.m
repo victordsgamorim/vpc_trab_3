@@ -2,6 +2,7 @@ Diretoria = 'pulmao';
 S = dir(fullfile(Diretoria,'fig*.jpg'));
 
 lungVolumeTotal = 0;
+newLungVolumeTotal = 0;
 
 new_crop=[
     117.510000000000,199.510000000000,436.980000000000,140.980000000000;...
@@ -23,27 +24,25 @@ for i = 1:numel(S)
     original = I;
      
 %     Filtro Gaussiano
-    I = imgaussfilt(I,10);
+%     I = imgaussfilt(I,10);
     
 %     Binariza
     I = im2gray(I);
     BW = imbinarize(I, 0.1);
+    BW = bwareaopen(BW, 1000);
     
 %     imwrite(BW, "pulmao/relatorio/fig" +i + "_bin.jpg");
-   
-
-%     Erosão + Dilatação
-    se = strel('disk',5);
-    closing = imerode(BW,se);
-    
-    se = strel('disk',5);
-    opening = imopen(closing,se);
-    
-%     imwrite(opening, "pulmao/relatorio/fig" +i + "_morph.jpg");
     
 %     Erosão
-    se = strel('disk',4);
-    opening = imerode(opening,se);
+    se = strel('disk',5);
+    opening = imerode(BW,se);
+    
+    se = strel('disk',5);
+    opening = imdilate(opening,se);
+    
+%     imwrite(opening, "pulmao/relatorio/fig" +i + "_morph2.jpg");
+    
+    
     
     
 %     imwrite(opening, "pulmao/relatorio/fig" +i + "_gauss.jpg");
@@ -65,14 +64,15 @@ for i = 1:numel(S)
   
 %     imwrite(opening, "pulmao/relatorio/fig" +i + "_crop.jpg");
 
-%     Deteção de Pulmão para calcular volume
+%     Deteção de Pulmão Para apagar pequenas areas sem morfologia
+%     matematica
     labeledBw = bwlabel(opening);
     measurements = regionprops(labeledBw, "Solidity", "Area"); 
     
    
     solidity = [measurements.Solidity];
-    area = [ measurements.Area];  
-    hiSolid= solidity > 0.1; 
+    area = [measurements.Area];  
+    hiSolid = solidity > 0.1; 
     maxArea = max(area(hiSolid)); 
     
     lungLabel = find(area==maxArea);  
@@ -81,11 +81,11 @@ for i = 1:numel(S)
     
     [bbb,lll] = bwboundaries(lung);  
    
-    [r, c] = find(lll > 1);
+    [r, c] = find(lll > 1);    
     rc = [r c];
     
     [row, col] = size(opening);
-    s = logical(ones(row,col));
+    newLung = logical(ones(row,col));
  
     
     [rrr, ccc] = size(rc);
@@ -97,33 +97,74 @@ for i = 1:numel(S)
         for j = 1:ccc
             primeira = rc(k);
             segunda = rc(k, j);
-     
-
         end
         
-        s(primeira, segunda) = 0;
+        newLung(primeira, segunda) = 0;
     end
+    
+    
+    labledBw2 = bwlabel(newLung);
+    
+
+    [B2,L2, N2, A2] = bwboundaries(labledBw2);
+    rp = regionprops(L2, "Area"); 
+    area2 = [rp.Area]; 
+    smallAreasLabels = find(area2 > 5000);
+    smallBlackPoints = ismember(L2, smallAreasLabels);
+    
+
   
   
+  blackbg = nnz(lung == 1);
+  if blackbg < 25000
+      if i >= 103
+          diffLung = newLung;
+      else
+          diffLung = newLung - smallBlackPoints;
+      end
+      
+     
+  else
+      diffLung = newLung;
+  end
+  
+  duplicateDiffLung = diffLung;
+
+%    Morfologia Matermatica
+   se = strel('disk',7);
+   diffLung = imdilate(diffLung,se);
    
+   se = strel('disk',13);
+   diffLung = imerode(diffLung,se);
+   
+   se = strel('disk',7);
+   diffLung = imdilate(diffLung,se);
+   
+  
     
 %     Busca por pontos pentro dentro da área branca
     [B,L] = bwboundaries(lung);  
     blackPixelsCount = nnz(L > 1);
     
     
-%     Calcula Volume
+%     Calcula Volume Pulmao 1 Antes da Morfologia
     lungVolume = blackPixelsCount * 7;
     totalL = lungVolume / 1000000;
     lungVolumeTotal = lungVolumeTotal + totalL;
+    
+%     Calcula Volume Pulmao 2 Depois de Morfologia
+    blackPNewLung = nnz(diffLung == 0);
+    diffLungVolume = blackPNewLung * 7;
+    newLungtotal = diffLungVolume / 1000000;
+    newLungVolumeTotal = newLungVolumeTotal + newLungtotal;
     
     
    
 %     Print
     figure(1)
     set(gcf,'Position',[100 100 1500 700])
-    subplot(1,3,1); imshow(original), title("Original " + "fig" +i + ".jpg")
-    subplot(1,3,2); imshow(opening, []); title("Volume Atual do pulmão" + totalL + "L / Volume Total ==> " + lungVolumeTotal + "L")
+    subplot(2,3,1); imshow(original), title("Original " + "fig" +i + ".jpg")
+    subplot(2,3,2); imshow(opening, []); title("Volume Atual do pulmão" + totalL + "L / Volume Total ==> " + lungVolumeTotal + "L")
    
    
     hold on
@@ -132,7 +173,29 @@ for i = 1:numel(S)
     end
     hold off
     
-    subplot(1,3,3); imshow(s, []); title("Volume Atual do pulmão" + totalL + "L / Volume Total ==> " + lungVolumeTotal + "L")
+    subplot(2,3,3); imshow(newLung, []); title("Volume Atual do pulmão" + totalL + "L / Volume Total ==> " + lungVolumeTotal + "L")
+    
+   
+    subplot(2,3,4)
+    imshow(newLung); hold on;
+    colors=['b' 'g' 'r' 'c' 'm' 'y'];
+    for k=1:length(B2)
+      boundary = B2{k};
+      cidx = mod(k,length(colors))+1;
+      plot(boundary(:,2), boundary(:,1),...
+           colors(cidx),'LineWidth',2);
+
+      %randomize text position for better visibility
+      rndRow = ceil(length(boundary)/(mod(rand*k,7)+1));
+      col = boundary(rndRow,2); row = boundary(rndRow,1);
+      h = text(col+1, row-1, num2str(L(row,col)));
+      set(h,'Color',colors(cidx),'FontSize',14,'FontWeight','bold');
+    end
+   hold off;
+   
+   subplot(2,3,5); imshow(duplicateDiffLung, []); 
+   subplot(2,3,6); imshow(diffLung, []); title("Volume Atual do pulmão" + newLungtotal + "L / Volume Total ==> " + newLungVolumeTotal + "L")
+  
     
 
  
