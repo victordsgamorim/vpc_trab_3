@@ -1,6 +1,8 @@
 Diretoria = 'pulmao';
 S = dir(fullfile(Diretoria,'fig*.jpg'));
 
+lungVolumeTotal = 0;
+
 new_crop=[
     117.510000000000,199.510000000000,436.980000000000,140.980000000000;...
     117.510000000000,199.510000000000,436.980000000000,140.980000000000; ...
@@ -26,6 +28,8 @@ for i = 1:numel(S)
 %     Binariza
     I = im2gray(I);
     BW = imbinarize(I, 0.1);
+    
+%     imwrite(BW, "pulmao/relatorio/fig" +i + "_bin.jpg");
    
 
 %     Erosão + Dilatação
@@ -35,9 +39,14 @@ for i = 1:numel(S)
     se = strel('disk',5);
     opening = imopen(closing,se);
     
+%     imwrite(opening, "pulmao/relatorio/fig" +i + "_morph.jpg");
+    
 %     Erosão
     se = strel('disk',4);
     opening = imerode(opening,se);
+    
+    
+%     imwrite(opening, "pulmao/relatorio/fig" +i + "_gauss.jpg");
     
 
 %     Adiciona BoundingBox
@@ -52,19 +61,51 @@ for i = 1:numel(S)
     elseif i < crop_decision
         opening = imcrop(opening, box(2,:));
     end
+    
+  
+%     imwrite(opening, "pulmao/relatorio/fig" +i + "_crop.jpg");
 
 %     Deteção de Pulmão para calcular volume
-    labeledBw = logical(opening);
+    labeledBw = bwlabel(opening);
     measurements = regionprops(labeledBw, "Solidity", "Area"); 
     
-    
+   
     solidity = [measurements.Solidity];
     area = [ measurements.Area];  
     hiSolid= solidity > 0.1; 
-    maxArea = max( area(hiSolid));  
+    maxArea = max(area(hiSolid)); 
+    
     lungLabel = find(area==maxArea);  
     lung = ismember(labeledBw, lungLabel);
     
+    
+    [bbb,lll] = bwboundaries(lung);  
+   
+    [r, c] = find(lll > 1);
+    rc = [r c];
+    
+    [row, col] = size(opening);
+    s = logical(ones(row,col));
+ 
+    
+    [rrr, ccc] = size(rc);
+    
+    
+    for k = 1:rrr
+      primeira = 0 ;
+      segunda = 0;
+        for j = 1:ccc
+            primeira = rc(k);
+            segunda = rc(k, j);
+     
+
+        end
+        
+        s(primeira, segunda) = 0;
+    end
+  
+  
+   
     
 %     Busca por pontos pentro dentro da área branca
     [B,L] = bwboundaries(lung);  
@@ -73,19 +114,25 @@ for i = 1:numel(S)
     
 %     Calcula Volume
     lungVolume = blackPixelsCount * 7;
+    totalL = lungVolume / 1000000;
+    lungVolumeTotal = lungVolumeTotal + totalL;
+    
+    
    
 %     Print
     figure(1)
     set(gcf,'Position',[100 100 1500 700])
-    subplot(1,2,1); imshow(original), title("Original " + "fig" +i + ".jpg")
-    subplot(1,2,2); imshow(opening, []); title("Volume ===> " + lungVolume + "mm³")
-    
+    subplot(1,3,1); imshow(original), title("Original " + "fig" +i + ".jpg")
+    subplot(1,3,2); imshow(opening, []); title("Volume Atual do pulmão" + totalL + "L / Volume Total ==> " + lungVolumeTotal + "L")
+   
    
     hold on
     for i = 1:length(B)
         plot(B{i}(:,2), B{i}(:,1), 'y', 'linewidth', 2.5);
     end
     hold off
+    
+    subplot(1,3,3); imshow(s, []); title("Volume Atual do pulmão" + totalL + "L / Volume Total ==> " + lungVolumeTotal + "L")
     
 
  
