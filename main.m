@@ -34,11 +34,11 @@ for i = 1:numel(S)
 %     imwrite(BW, "pulmao/relatorio/fig" +i + "_bin.jpg");
     
 %     Erosão
-    se = strel('disk',5);
+    se = strel('disk',1);
     opening = imerode(BW,se);
     
-    se = strel('disk',5);
-    opening = imdilate(opening,se);
+%     se = strel('disk',5);
+%     opening = imdilate(opening,se);
     
 %     imwrite(opening, "pulmao/relatorio/fig" +i + "_morph2.jpg");
     
@@ -131,13 +131,13 @@ for i = 1:numel(S)
   duplicateDiffLung = diffLung;
 
 %    Morfologia Matermatica
-   se = strel('disk',7);
+   se = strel('disk',9);
    diffLung = imdilate(diffLung,se);
    
    se = strel('disk',13);
    diffLung = imerode(diffLung,se);
    
-   se = strel('disk',7);
+   se = strel('disk',6);
    diffLung = imdilate(diffLung,se);
    
   
